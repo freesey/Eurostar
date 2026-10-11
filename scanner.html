@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#14083a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scanner">
+<title>Scanner</title>
+<style>
+:root{--bg:#14083a;--fg:#f5f1ff;--accent:#ff3d8b;--gold:#f4c95d;--dim:#a79bd6;box-sizing:border-box}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:Georgia,"Times New Roman",serif;overflow:hidden}
+#scan,#count{position:fixed;inset:0;display:none}
+.show{display:flex!important}
+#scan{flex-direction:column;align-items:center;justify-content:center;background:#000}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.rahmen{position:relative;width:min(70vw,70vh,360px);aspect-ratio:1;border-radius:22px;
+  box-shadow:0 0 0 100vmax rgba(20,8,58,.72);border:3px solid var(--gold)}
+.rahmen::before,.rahmen::after{content:"";position:absolute;left:10%;right:10%;height:2px;background:var(--accent);opacity:.8;animation:sweep 2.2s ease-in-out infinite}
+.rahmen::before{top:10%}.rahmen::after{display:none}
+@keyframes sweep{0%,100%{top:10%}50%{top:88%}}
+.info{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 28px);text-align:center;padding:0 24px}
+.info p{margin:0;font-size:18px;text-shadow:0 1px 6px #000}
+.titel{position:absolute;top:calc(env(safe-area-inset-top,0px) + 22px);left:0;right:0;text-align:center;font-size:20px;letter-spacing:.12em;color:var(--gold);text-shadow:0 1px 6px #000}
+#count{flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+.ring{position:relative;width:180px;height:180px;margin:0 auto 28px}
+svg{width:100%;height:100%;transform:rotate(-90deg)}
+circle{fill:none;stroke-width:8}
+.track{stroke:#ffffff22}
+.bar{stroke:var(--accent);stroke-linecap:round;stroke-dasharray:502;stroke-dashoffset:502}
+.num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;font-weight:700}
+h1{font-size:26px;margin:0 0 8px}
+p.t{margin:0;color:var(--dim);font-size:17px;line-height:1.5}
+.btn{display:inline-block;margin:14px 6px 0;padding:15px 28px;border-radius:40px;border:0;background:var(--accent);color:#fff;font:700 19px Georgia,serif;text-decoration:none;cursor:pointer}
+.btn.leise{background:#ffffff22;font-weight:400;font-size:16px}
+.knoepfe{display:none}
+@media (prefers-reduced-motion:reduce){.bar{transition:none!important}.rahmen::before{animation:none}}
+</style>
+</head>
+<body>
+
+<div id="scan">
+  <video id="video" playsinline muted></video>
+  <div class="titel">KARTE SCANNEN</div>
+  <div class="rahmen"></div>
+  <div class="info"><p id="status">Kamera wird gestartet …</p><p id="diag" style="font-size:12px;opacity:.65;margin-top:8px"></p></div>
+</div>
+
+<div id="count">
+  <div class="ring">
+    <svg viewBox="0 0 180 180"><circle class="track" cx="90" cy="90" r="80"/><circle class="bar" id="bar" cx="90" cy="90" r="80"/></svg>
+    <div class="num" id="num"></div>
+  </div>
+  <h1 id="title">Gleich geht's los</h1>
+  <p class="t" id="msg">Dein Song wird geladen.</p>
+  <div class="knoepfe" id="knoepfe">
+    <a class="btn" id="oeffnen" href="#">▶ Song öffnen</a><br>
+    <button class="btn leise" id="weiter">Nächste Karte scannen</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  // ---- Einstellungen ------------------------------------------------------
+  var SEKUNDEN = 4;        // Wartezeit vor dem Öffnen
+  var MODUS = "uri";       // "uri" = Spotify-App direkt | "link" = Weblink | "button" = erst nach Tipp
+  // -------------------------------------------------------------------------
+
+  var el = function(i){ return document.getElementById(i); };
+  var scanView = el("scan"), countView = el("count"), video = el("video"), status = el("status");
+  var num = el("num"), bar = el("bar"), title = el("title"), msg = el("msg"), knoepfe = el("knoepfe");
+  var stream = null, state = "idle", timer = null, detector = null, lastTick = 0;
+  var canvas = document.createElement("canvas"), ctx = canvas.getContext("2d", { willReadFrequently: true });
+  var diag = el("diag"), jsqrReady = false, nativFehler = "", ticks = 0;
+
+  // jsQR mit Ausweich-Quellen laden
+  function ladeJsQR(urls) {
+    if (typeof jsQR === "function") { jsqrReady = true; return; }
+    var u = urls.shift();
+    if (!u) return;
+    var sc = document.createElement("script");
+    sc.src = u;
+    sc.onload = function(){ jsqrReady = (typeof jsQR === "function"); if (!jsqrReady) ladeJsQR(urls); };
+    sc.onerror = function(){ ladeJsQR(urls); };
+    document.head.appendChild(sc);
+  }
+  ladeJsQR([
+    "https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js",
+    "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js",
+    "https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"
+  ]);
+
+  if ("BarcodeDetector" in window) {
+    try { detector = new BarcodeDetector({ formats: ["qr_code"] }); } catch (e) { detector = null; }
+  }
+
+  // Song-ID aus dem Inhalt eines QR-Codes holen
+  function holeId(text) {
+    var id = null;
+    try { id = new URL(text).searchParams.get("id"); } catch (e) {}
+    if (!id) { var m = /track\/([A-Za-z0-9]{22})/.exec(text); if (m) id = m[1]; }
+    return (id && /^[A-Za-z0-9]{22}$/.test(id)) ? id : null;
+  }
+
+  function zeige(v) {
+    scanView.classList.toggle("show", v === "scan");
+    countView.classList.toggle("show", v === "count");
+  }
+
+  function stopKamera() {
+    if (stream) { stream.getTracks().forEach(function(t){ t.stop(); }); stream = null; }
+    video.srcObject = null;
+  }
+
+  function startScannen() {
+    clearTimeout(timer);
+    state = "scan";
+    knoepfe.style.display = "none";
+    zeige("scan");
+    status.textContent = "Kamera wird gestartet …";
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      status.textContent = "Dieser Browser erlaubt keinen Kamerazugriff. Öffne die Seite in Safari oder Chrome.";
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    }).then(function(s){
+      stream = s;
+      try {
+        var tr = s.getVideoTracks()[0];
+        var cap = tr.getCapabilities ? tr.getCapabilities() : {};
+        if (cap.focusMode && cap.focusMode.indexOf("continuous") >= 0) {
+          tr.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(function(){});
+        }
+      } catch (e) {}
+      video.srcObject = s;
+      return video.play();
+    }).then(function(){
+      status.textContent = "Halte den QR-Code in den Rahmen";
+      requestAnimationFrame(schleife);
+    }).catch(function(){
+      status.innerHTML = 'Kein Zugriff auf die Kamera. Erlaube die Kamera in den Browser-Einstellungen<br>' +
+        '<button class="btn" onclick="location.reload()">Erneut versuchen</button>';
+    });
+  }
+
+  function schleife(t) {
+    if (state !== "scan") return;
+    if (t - lastTick > 120 && video.readyState >= 2 && video.videoWidth) {
+      lastTick = t;
+      lies();
+    }
+    requestAnimationFrame(schleife);
+  }
+
+  function lies() {
+    var w = video.videoWidth, h = video.videoHeight;
+    ticks++;
+    // 1) Native Erkennung (Chrome/Android), falls vorhanden
+    if (detector) {
+      detector.detect(video).then(function(codes){
+        if (codes && codes.length) gefunden(codes[0].rawValue);
+      }).catch(function(e){ nativFehler = " · nativ: Fehler"; });
+    }
+    // 2) jsQR: abwechselnd Gesamtbild und vergrößerter Mittelausschnitt
+    if (jsqrReady) {
+      var sx = 0, sy = 0, sw = w, sh = h, zielMax = 1280;
+      if (ticks % 2 === 0) {                       // Mittelausschnitt, vergrößert
+        var k = Math.round(Math.min(w, h) * 0.8);
+        sx = Math.round((w - k) / 2); sy = Math.round((h - k) / 2); sw = k; sh = k; zielMax = 900;
+      }
+      var f = Math.min(1, zielMax / Math.max(sw, sh));
+      canvas.width = Math.round(sw * f); canvas.height = Math.round(sh * f);
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      var d = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var r = jsQR(d.data, d.width, d.height, { inversionAttempts: "dontInvert" });
+      if (r && r.data) { gefunden(r.data); return; }
+    }
+    if (ticks % 10 === 0) {
+      diag.textContent = w + "×" + h + " · " + (detector ? "nativ" : "kein nativ") +
+        " · jsQR: " + (jsqrReady ? "bereit" : "lädt …") + nativFehler;
+    }
+    if (ticks === 40 && !jsqrReady && !detector) {
+      status.textContent = "Scanner-Bibliothek konnte nicht geladen werden (Internetverbindung?)";
+    }
+  }
+
+  var hinweisTimer = null;
+  function gefunden(text) {
+    if (state !== "scan") return;
+    var id = holeId(text);
+    if (!id) {
+      status.textContent = "Das ist keine Karte aus diesem Spiel";
+      clearTimeout(hinweisTimer);
+      hinweisTimer = setTimeout(function(){ if (state === "scan") status.textContent = "Halte den QR-Code in den Rahmen"; }, 2000);
+      return;
+    }
+    state = "count";
+    if (navigator.vibrate) navigator.vibrate(60);
+    stopKamera();
+    countdown(id);
+  }
+
+  function countdown(id) {
+    var weblink = "https://open.spotify.com/track/" + id + "?play=true&go=1";
+    zeige("count");
+    knoepfe.style.display = "none";
+    title.textContent = "Gleich geht's los";
+    msg.textContent = "Dein Song wird geladen.";
+    num.textContent = SEKUNDEN;
+    bar.style.transition = "none";
+    bar.style.strokeDashoffset = 502;
+    void bar.getBoundingClientRect();
+    bar.style.transition = "stroke-dashoffset " + SEKUNDEN + "s linear";
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){ bar.style.strokeDashoffset = 0; }); });
+    var left = SEKUNDEN;
+    (function tick(){
+      timer = setTimeout(function(){
+        left--;
+        if (left > 0) { num.textContent = left; tick(); return; }
+        fertig(id, weblink);
+      }, 1000);
+    })();
+  }
+
+  function fertig(id, weblink) {
+    num.textContent = "♪";
+    state = "done";
+    el("oeffnen").href = weblink;
+    knoepfe.style.display = "block";
+    if (MODUS === "button") {
+      title.textContent = "Bereit?";
+      msg.textContent = "Tippe auf den Knopf, um den Song zu öffnen.";
+      return;
+    }
+    title.textContent = "Viel Spaß!";
+    msg.textContent = "Spotify öffnet sich. Danach geht es hier weiter.";
+    window.location.href = (MODUS === "uri") ? "spotify:track:" + id : weblink;
+  }
+
+  el("weiter").addEventListener("click", startScannen);
+  // Wenn du aus Spotify zurückkommst, startet die Kamera automatisch wieder
+  document.addEventListener("visibilitychange", function(){
+    if (document.visibilityState === "visible" && state === "done") startScannen();
+  });
+  document.addEventListener("visibilitychange", function(){
+    if (document.visibilityState === "hidden" && state === "scan") { stopKamera(); state = "pause"; }
+    else if (document.visibilityState === "visible" && state === "pause") startScannen();
+  });
+
+  startScannen();
+})();
+</script>
+</body>
+</html>
