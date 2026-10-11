@@ -36,7 +36,7 @@ a{color:var(--accent)}
 <script>
 (function(){
   // Wie soll der Song geöffnet werden?  "uri" | "link" | "button"
-  var MODUS = "uri";
+  var MODUS = "button";
   var q = new URLSearchParams(location.search);
   var id = q.get("id") || "";
   var secs = parseInt(q.get("d"), 10);
@@ -68,7 +68,7 @@ a{color:var(--accent)}
       return;
     }
     // "uri": öffnet die Spotify-App direkt, "link": normaler Weblink
-    window.location.href = (MODUS === "button") ? "spotify:track:" + id : target;
+    window.location.href = (MODUS === "uri") ? "spotify:track:" + id : target;
     setTimeout(function(){
       title.textContent = "Spotify öffnet sich nicht?";
       msg.innerHTML = '<a href="' + target + '">Hier tippen</a>';
