@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Eurostar</title>
+<style>
+:root{--bg:#1b1240;--fg:#f5f1ff;--accent:#ff3d8b;--dim:#a79bd6;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{height:100%}
+body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:Georgia,"Times New Roman",serif;display:flex;align-items:center;justify-content:center;text-align:center}
+main{padding:24px;max-width:420px}
+.ring{position:relative;width:180px;height:180px;margin:0 auto 28px}
+svg{width:100%;height:100%;transform:rotate(-90deg)}
+circle{fill:none;stroke-width:8}
+.track{stroke:#ffffff22}
+.bar{stroke:var(--accent);stroke-linecap:round;stroke-dasharray:502;stroke-dashoffset:502}
+.num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;font-weight:700}
+h1{font-size:26px;margin:0 0 8px}
+p{margin:0;color:var(--dim);font-size:17px;line-height:1.5}
+a{color:var(--accent)}
+.btn{display:inline-block;margin-top:18px;padding:16px 30px;border-radius:40px;background:var(--accent);color:#fff;font-size:20px;font-weight:700;text-decoration:none}
+@media (prefers-reduced-motion:reduce){.bar{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="ring">
+    <svg viewBox="0 0 180 180"><circle class="track" cx="90" cy="90" r="80"/><circle class="bar" id="bar" cx="90" cy="90" r="80"/></svg>
+    <div class="num" id="num"></div>
+  </div>
+  <h1 id="title">Gleich geht's los</h1>
+  <p id="msg">Dein Song wird geladen.</p>
+</main>
+<script>
+(function(){
+  // Wie soll der Song geöffnet werden?  "uri" | "link" | "button"
+  var MODUS = "uri";
+  var q = new URLSearchParams(location.search);
+  var id = q.get("id") || "";
+  var secs = parseInt(q.get("d"), 10);
+  if (!(secs >= 1 && secs <= 10)) secs = 1;   // Standard: 1 Sekunde
+  var title = document.getElementById("title"),
+      msg = document.getElementById("msg"),
+      num = document.getElementById("num"),
+      bar = document.getElementById("bar");
+
+  if (!/^[A-Za-z0-9]{22}$/.test(id)) {
+    title.textContent = "Kein Song gefunden";
+    msg.textContent = "Scanne den QR-Code auf einer Karte noch einmal.";
+    return;
+  }
+  var target = "https://open.spotify.com/track/" + id + "?play=true&go=1";
+  num.textContent = secs;
+  bar.style.transition = "stroke-dashoffset " + secs + "s linear";
+  requestAnimationFrame(function(){ requestAnimationFrame(function(){ bar.style.strokeDashoffset = 0; }); });
+
+  var left = secs;
+  var t = setInterval(function(){
+    left--;
+    if (left > 0) { num.textContent = left; return; }
+    clearInterval(t);
+    num.textContent = "♪";
+    if (MODUS === "button") {
+      title.textContent = "Bereit?";
+      msg.innerHTML = '<a class="btn" href="' + target + '">▶ Song abspielen</a>';
+      return;
+    }
+    // "uri": öffnet die Spotify-App direkt, "link": normaler Weblink
+    window.location.href = (MODUS === "uri") ? "spotify:track:" + id : target;
+    setTimeout(function(){
+      title.textContent = "Spotify öffnet sich nicht?";
+      msg.innerHTML = '<a href="' + target + '">Hier tippen</a>';
+    }, 3000);
+  }, 1000);
+})();
+</script>
+</body>
+</html>
