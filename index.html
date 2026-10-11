@@ -48,7 +48,7 @@ a{color:var(--accent)}
     msg.textContent = "Scanne den QR-Code auf einer Karte noch einmal.";
     return;
   }
-  var target = "https://open.spotify.com/track/" + id;
+  var target = "https://open.spotify.com/track/" + id + "?play=true&go=1";
   num.textContent = secs;
   bar.style.transition = "stroke-dashoffset " + secs + "s linear";
   requestAnimationFrame(function(){ requestAnimationFrame(function(){ bar.style.strokeDashoffset = 0; }); });
