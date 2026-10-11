@@ -37,7 +37,7 @@ a{color:var(--accent)}
   var q = new URLSearchParams(location.search);
   var id = q.get("id") || "";
   var secs = parseInt(q.get("d"), 10);
-  if (!(secs >= 1 && secs <= 10)) secs = 4;   // Standard: 4 Sekunden
+  if (!(secs >= 1 && secs <= 10)) secs = 1;   // Standard: 4 Sekunden
   var title = document.getElementById("title"),
       msg = document.getElementById("msg"),
       num = document.getElementById("num"),
