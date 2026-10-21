@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#14083a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<title>ESC-Zeitstrahl</title>
+<title>Eurostar</title>
 <style>
 :root{--bg:#14083a;--bg2:#1f1050;--fg:#f5f1ff;--dim:#a79bd6;--accent:#ff3d8b;--gold:#f4c95d;--cyan:#34e0d4;--paper:#fbf7ee;--ink:#1b1240;--ok:#2fd18b;--bad:#ff5a6e;box-sizing:border-box}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -221,7 +221,7 @@ function render(){
 function viewMenu(){
   var gespeichert = laden();
   var weiter = gespeichert && gespeichert.G && ['start','zug','ergebnis'].indexOf(gespeichert.ANSICHT) >= 0;
-  return '<h1>ESC-ZEITSTRAHL</h1><p class="sub">DAS KARTENSPIEL</p>' +
+  return '<h1>Eurostar</h1><p class="sub">DAS KARTENSPIEL</p>' +
     (weiter ? '<button class="btn gold" data-act="fortsetzen">▶ Spiel fortsetzen</button>' : '') +
     '<button class="btn" data-act="neu">Neues Spiel</button>' +
     '<button class="btn zwei" data-act="regeln">Spielregeln</button>' +
