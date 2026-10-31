@@ -223,12 +223,19 @@ function render(){
   else if (ANSICHT === 'ergebnis') h = viewErgebnis();
   else if (ANSICHT === 'ende') h = viewEnde();
   $('app').innerHTML = h;
+  playUI();
+}
+function playUI(){
+  var b = $('playBtn'), bar = $('playBar'), tx = $('playTxt');
+  if (b) b.textContent = sp.spielt ? '❚❚' : '▶';
+  if (bar) bar.style.width = sp.anteil + '%';
+  if (tx && sp.text) tx.textContent = sp.text;
 }
 
 function viewMenu(){
   var gespeichert = laden();
   var weiter = gespeichert && gespeichert.G && ['start','zug','ergebnis'].indexOf(gespeichert.ANSICHT) >= 0;
-  return '<h1>Eurostar</h1><p class="sub">DAS KARTENSPIEL</p>' +
+  return '<h1>EUROSTAR</h1><p class="sub">DAS KARTENSPIEL</p>' +
     (weiter ? '<button class="btn gold" data-act="fortsetzen">▶ Spiel fortsetzen</button>' : '') +
     '<button class="btn" data-act="neu">Neues Spiel</button>' +
     '<button class="btn zwei" data-act="regeln">Spielregeln</button>' +
@@ -293,7 +300,10 @@ function viewZug(){
        '<a class="btn zwei klein" target="_blank" rel="noopener" href="https://open.spotify.com/track/' + k.id + '">In Spotify öffnen</a>' +
        '<p style="font-size:14px">Der eingeblendete Player verrät Titel und Interpret. Ohne Premium spielt Spotify nur einen Ausschnitt.</p></div></details>';
   if (G.modus === 'punkte'){
-    h += '<div class="box"><b>Was war richtig? (Spielemaster)</b><div class="fakten">' +
+    h += '<div class="box"><div class="top"><b>Was war richtig? (Spielemaster)</b>' +
+         '<button data-act="zeigen">' + (k.zeigen ? '🙈 Verbergen' : '👁 Song anzeigen') + '</button></div>' +
+         (k.zeigen ? '<div style="margin:10px 0 4px">' + kartenHtml(k.id) + '<div class="dim" style="font-size:13px;margin-top:4px">Nur für den Spielemaster. Vor den Mitspielern verbergen!</div></div>' : '') +
+         '<div class="fakten">' +
       [['song','Song'],['interpret','Interpret'],['jahr','Jahr'],['land','Land']].map(function(f){
         return '<button class="' + (k.fakten[f[0]] ? 'an' : '') + '" data-act="fakt" data-f="' + f[0] + '">' + (k.fakten[f[0]] ? '✓ ' : '') + f[1] + '</button>';
       }).join('') + '</div></div>';
@@ -424,7 +434,7 @@ $('scanZu').onclick = scanStop;
 document.addEventListener('visibilitychange', function(){ if (document.visibilityState === 'hidden') scanStop(); });
 
 /* ===================== SPOTIFY-PLAYER ===================== */
-var sp = {api:null, ctrl:null, pending:null, spielt:false};
+var sp = {api:null, ctrl:null, pending:null, spielt:false, anteil:0, text:''};
 window.onSpotifyIframeApiReady = function(api){
   sp.api = api;
   api.createController($('spPlayer'), {uri:'spotify:track:' + (sp.pending || '0bhe4GXAZsKViKVO4MHsFR'), width:300, height:80}, function(c){
@@ -432,15 +442,17 @@ window.onSpotifyIframeApiReady = function(api){
     c.addListener('playback_update', function(e){
       var d = e.data || {}; sp.spielt = !d.isPaused && !d.isBuffering;
       var b = $('playBtn'), bar = $('playBar'), tx = $('playTxt');
+      if (d.duration) sp.anteil = Math.min(100, d.position / d.duration * 100);
+      sp.text = sp.spielt ? 'Es läuft …' : (d.position > 0 ? 'Pausiert' : 'Tippe zum Abspielen');
       if (b) b.textContent = sp.spielt ? '❚❚' : '▶';
-      if (bar && d.duration) bar.style.width = Math.min(100, d.position / d.duration * 100) + '%';
-      if (tx) tx.textContent = sp.spielt ? 'Es läuft …' : (d.position > 0 ? 'Pausiert' : 'Tippe zum Abspielen');
+      if (bar) bar.style.width = sp.anteil + '%';
+      if (tx) tx.textContent = sp.text;
     });
   });
 };
 (function(){ var s = document.createElement('script'); s.src = 'https://open.spotify.com/embed/iframe-api/v1'; s.async = true; document.body.appendChild(s); })();
 function songLaden(id){
-  sp.pending = id; sp.spielt = false;
+  sp.pending = id; sp.spielt = false; sp.anteil = 0; sp.text = '';
   $('spBox').classList.remove('sichtbar');
   if (sp.ctrl){ try { sp.ctrl.loadUri('spotify:track:' + id); } catch(e){} }
 }
@@ -464,7 +476,7 @@ function startkarteSetzen(i, id){
 }
 function karteZiehen(id){
   if (!neueKarte(id)) return;
-  G.karte = {id:id, slot:null, fakten:{song:false, interpret:false, jahr:false, land:false}};
+  G.karte = {id:id, slot:null, zeigen:false, fakten:{song:false, interpret:false, jahr:false, land:false}};
   songLaden(id); speichern(); render();
 }
 function loesen(){
@@ -529,6 +541,7 @@ document.addEventListener('click', function(e){
     case 'zugZufall': var z3 = zufallsKarte(G.benutzt); if (z3) karteZiehen(z3); break;
     case 'slot': G.karte.slot = i; speichern(); render(); break;
     case 'fakt': G.karte.fakten[b.dataset.f] = !G.karte.fakten[b.dataset.f]; speichern(); render(); break;
+    case 'zeigen': G.karte.zeigen = !G.karte.zeigen; speichern(); render(); break;
     case 'play': playKlick(); break;
     case 'playerZeigen': $('spBox').classList.toggle('sichtbar'); break;
     case 'loesen': loesen(); break;
